@@ -1,0 +1,9 @@
+twitter.com/anyuser/status/733353996585336832
+
+http://stackoverflow.com/questions/30948150/how-to-decode-ascii-from-stream-for-analysis
+texts = json_load['text'] # string
+coded = texts.encode('utf-8')
+
+http://stackoverflow.com/questions/26621993/unicode-decode-error-when-retrieving-twitter-data-using-python
+s.decode('utf-8')
+https://www.quora.com/How-can-I-get-a-stream-of-tweets-from-a-particular-country-using-Twitter-API

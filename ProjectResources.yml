@@ -1,0 +1,15 @@
+---
+TC:
+  time_limit: 0
+  tweets_num: 0
+  file_path: 'data/'
+  file_name_prefix: 'tweets_'
+  file_extension: '.csv'
+  file_size_limit: 0
+  tweets_in_file: 0
+  file_size: 0
+TwitterParams:
+  OAuthConsKey: 'XXX'
+  OAuthConsSecret: 'XXX'
+  OAuthToken: 'XXX'
+  OAuthTokenSecret: 'XXX'
