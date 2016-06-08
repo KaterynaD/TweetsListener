@@ -7,9 +7,19 @@ import os, sys
 import fnmatch
 import re
 from textblob import TextBlob
-
+"""
+TweetsListener.py - 06.07.16 Kate Drogaieva
+This module provides classes to perform tweets collection and sentiment analysis
+v3 06.07.16
+"""
 #===============================================================================
 class TweetsListener(StreamListener):
+    """
+        This is a base class to listen tweets only
+        and stop listening when a specific number of tweets collected
+        or time listening is out
+    """
+#-------------------------------------------------------------------------------
     def __init__(self,
     api=None,
     search=['None'],
@@ -18,12 +28,22 @@ class TweetsListener(StreamListener):
     start_time=datetime.datetime.now(),
     start_counter=0
     ):
+        """
+            search (list) - search term
+            time_limit(int) - number of seconds while tweets are listen 0 means forever
+            tweets_limit (int) - number of tweets to collect. 0 means no limit
+            start_time (datetime) - init data for the start time in a case of listening problem and restarting
+            to keep desired time_limit
+            start_counter (int) - init data for the tweet counter in a case of listening problem and restarting
+            to keep desired tweets_limit
+        """
         self.api = api or API()
         self.search=search
         self.start_time=start_time
         self.time_limit=time_limit
         self.tweets_limit=tweets_limit
         self.counter=start_counter
+#-------------------------------------------------------------------------------
     def on_data(self, data):
         # The presence of 'in_reply_to_status' indicates a "normal" tweet.
         # The presence of 'delete' indicates a tweet that was deleted after posting.
@@ -31,7 +51,12 @@ class TweetsListener(StreamListener):
             if self.on_status(data):
                 sys.exit(0)
         return
+#-------------------------------------------------------------------------------
     def on_status(self, status):
+        """
+            Collects tweet in an inner data structure,
+            checks if there is a time stop tweet collection
+        """
         self.save_tweet(self.get_tweet_data(status))
         self.counter+=1
         sys.stdout.flush()
@@ -42,15 +67,23 @@ class TweetsListener(StreamListener):
             return self.on_time_limit()
 
         return False
+#-------------------------------------------------------------------------------
     def on_tweets_limit(self):
+        """
+            When the total tweets number reached the limit
+        """
         print
         print "Finished collecting tweets. Total tweets number reached the limit"
         return True
+#-------------------------------------------------------------------------------
     def on_time_limit(self):
+        """
+            When the time to collect tweets is out
+        """
         print
         print "Finished collecting tweets. Collection time is over"
         return True
-
+#-------------------------------------------------------------------------------
     def on_error(self, status_code):
         print 'Error: ' + str(status_code)
         print 'Timeout...wait 10 sec'
@@ -58,13 +91,19 @@ class TweetsListener(StreamListener):
             self.time_limit+=10
         time.sleep(10)
         return True
+#-------------------------------------------------------------------------------
     def on_timeout(self):
         print 'Timeout...wait 10 sec'
         if self.time_limit>0:
             self.time_limit+=10
         time.sleep(10)
         return True
+#-------------------------------------------------------------------------------
     def get_tweet_data(self,status):
+        """
+            Reads the tweet from status XML and
+            adds some info in tweet{} dictionary
+        """
         tweet={}
         tweet['id']=str(json.dumps(json.loads(status)['id_str']))
         tweet['created']=str(json.dumps(json.loads(status)['created_at']))
@@ -86,11 +125,23 @@ class TweetsListener(StreamListener):
                 tweet['province']=str(json.dumps(json.loads(place)['name'])).decode('raw-unicode-escape','ignore').encode('utf-8','ignore')
             tweet['coordinates']=json.loads(place)['bounding_box']['coordinates'][0]
         return tweet
+#-------------------------------------------------------------------------------
     def save_tweet(self,tweet):
+        """
+            Should be used to save the tweet from the tweet dictionary
+            It just prints dot in the base class
+        """
         print '.',
         return
 #===============================================================================
 class TWeetSentimentAnalyzed(TweetsListener):
+    """
+        The class analyzes the tweet emotion
+        based on emoticons in the tweet if any
+        or or applies NLP procedures from textblob package
+        to perform sentiment analysis
+    """
+#-------------------------------------------------------------------------------
     def __init__(self,
     api=None,
     search=['None'],
@@ -99,6 +150,10 @@ class TWeetSentimentAnalyzed(TweetsListener):
     start_time=datetime.datetime.now(),
     start_counter=0
     ):
+        """
+            In addition to the base class the constructor
+            defines POSITIV, NEGATIVE or other emoticons
+        """
         TweetsListener.__init__(self,
         api,
         search,
@@ -115,19 +170,32 @@ class TWeetSentimentAnalyzed(TweetsListener):
                      self.NEUTRAL : '😐|😑|😳|😮|😯|😶|😴|😵|😲',
                      self.CONFUSED: '😕'
                      }
+#-------------------------------------------------------------------------------
     def get_tweet_data(self,status):
+        """
+            The same as in the base class plus
+            sentiment analysis of the tweet
+        """
         tweet=TweetsListener.get_tweet_data(self,status)
         self.sentiment_analysis(tweet)
         return tweet
-
+#-------------------------------------------------------------------------------
     def sentiment_analysis(self,tweet):
+        """
+            Runs the sentiments analysis based on emoticons in the tweet
+            If there are no emoticons or the sentiment is NEUTRAL or CONFUSED
+            runs a sentiment analysis from TextBlob package
+        """
         tweet['emoticons'] = []
         tweet['sentiments'] = []
         self.sentiment_analysis_by_emoticons(tweet)
         if ((len(tweet['sentiments']) == 0) or (tweet['sentiments'] == self.NEUTRAL) or (tweet['sentiments'] == self.CONFUSED)):
             self.sentiment_analysis_by_text(tweet)
+#-------------------------------------------------------------------------------
     def sentiment_analysis_by_emoticons(self,tweet):
-
+        """
+            Based on the emoticons set the sentiment for the tweet
+        """
         for sentiment, emoticons_icons in self.emoticons.iteritems():
             matched_emoticons = re.findall(emoticons_icons, tweet['text'])
             if len(matched_emoticons) > 0:
@@ -141,8 +209,12 @@ class TWeetSentimentAnalyzed(TweetsListener):
             tweet['sentiments'] = self.NEGATIVE
         else:
             tweet['sentiments'] = self.CONFUSED
-
+#-------------------------------------------------------------------------------
     def sentiment_analysis_by_text(self,tweet):
+        """
+            Set the sentiment of the tweet based on the polarity
+            from TextBlob sentiment analysis
+        """
         blob = TextBlob(tweet['text'].decode('ascii', errors="replace"))
         sentiment_polarity = blob.sentiment.polarity
         if sentiment_polarity < 0:
@@ -154,6 +226,10 @@ class TWeetSentimentAnalyzed(TweetsListener):
         tweet['sentiments'] = sentiment
 #===============================================================================
 class TWeetsToFile(TweetsListener):
+    """
+        The class saves collected tweets in a csv file
+    """
+#-------------------------------------------------------------------------------
     def __init__(self,
     api=None,
     search=['None'],
@@ -168,6 +244,16 @@ class TWeetsToFile(TweetsListener):
     tweets_in_file=0,
     file_size=0
     ):
+        """
+            file_path (string) - where to save the file_path. Default current directry (.)
+            file_name (string) - file name. Default 'tweets_'
+            file_extension (string) - file extension. Default '.csv'
+            file_size_limit (int) - file size in bytes when the class stops tweets collecting.
+            If tweets_in_file or file_size are not 0, the total file size is taken into account
+            Default 0, to ignore the parameter
+            tweets_in_file (int) - maximum number of tweets in the file. When it's reached the class openes a new file. Default 0, to ignore the parameter
+            file_size (int) - maximum current file size in bytes. When it's reached the class openes a new file. Default 0 to ignore the parameter.
+        """
         TweetsListener.__init__(self,
         api,
         search,
@@ -188,23 +274,39 @@ class TWeetsToFile(TweetsListener):
            self.file_number=0
         else:
            self.split_to_files=False
+#-------------------------------------------------------------------------------
     def on_status(self, status):
+        """
+            saves the tweet and
+            compares collected files size to the file_size_limit
+        """
         Result=TweetsListener.on_status(self,status)
         if not Result:
             current_files_size=sum(os.path.getsize(self.file_path+f) for f in fnmatch.filter(os.listdir(self.file_path), self.file_name+'*'+self.file_extension))
             if (current_files_size>self.file_size_limit and self.file_size_limit>0):
                     Result=self.on_file_size_limit()
         return Result
+#-------------------------------------------------------------------------------
     def on_file_size_limit(self):
+        """
+            When the total File Size limit was reached
+        """
         print
         print "Finished collecting tweets. Total File Size limit was reached"
         return True
+#-------------------------------------------------------------------------------
     def on_save_tweet(self):
+        """
+            When the tweet is saved
+            It openes a new file if lemets are reached
+        """
+        #.......................................................................
         def start_new_file():
             self.file_number+=1
             self.tweets_file=self.file_path + self.file_name +"_part_"+str(self.file_number)+ self.file_extension
             self.file_line_counter=0
             return
+        #.......................................................................
         if self.split_to_files:
             current_file_size=os.path.getsize(self.tweets_file)
             if ((current_file_size>self.file_size) and (self.file_size>0)):
@@ -213,13 +315,25 @@ class TWeetsToFile(TweetsListener):
         if ((self.file_line_counter>self.tweets_in_file) and (self.tweets_in_file>0)):
                 print "Number of tweets in the current file reached the limit. Opening new file..."
                 start_new_file()
+#-------------------------------------------------------------------------------
     def save_tweet(self,tweet):
+        """
+            Saves the tweet in a csv file
+        """
         with open(self.tweets_file, "ab") as output:
             output.write(tweet['id']+','+tweet['created']+','+tweet['text']+','+tweet['retweet_count']+','+tweet['favorite_count']+','+tweet['lang']+','+tweet['country']+','+tweet['city']+','+tweet['province']+'\n')
         self.file_line_counter+=1
         self.on_save_tweet()
 #===============================================================================
 class TWeetsCoordinatesToFile(TWeetsToFile):
+    """
+        In addition to the tweet itself, the class saves GEO info
+        in a separate file. "_geo_" is added to the file name
+        The GEO file is csv, many-to-one relations to the tweets file
+        All files total size is taken into account to stop tweets collection at file_size_limit
+        Only tweets file are splitted in multiply files
+    """
+#-------------------------------------------------------------------------------
     def __init__(self,
     api=None,
     search=['None'],
@@ -248,18 +362,28 @@ class TWeetsCoordinatesToFile(TWeetsToFile):
         tweets_in_file,
         file_size)
         self.tweets_geo_file=self.file_path + self.file_name  +"_geo_"+ self.file_extension
+#-------------------------------------------------------------------------------
     def save_coordinates(self,tweet):
+        """
+            Saves coordinates in a file
+        """
         if tweet['coordinates']:
             with open(self.tweets_geo_file, "ab") as output:
                 i=1
                 for c in tweet['coordinates']:
                     output.write(tweet['id']+','+tweet['country']+','+tweet['city']+','+tweet['province']+','+str(i)+', '+str(c[0])+', '+str(c[1])+'\n')
                     i+=1
+#-------------------------------------------------------------------------------
     def save_tweet(self,tweet):
         TWeetsToFile.save_tweet(self,tweet)
         self.save_coordinates(tweet)
 #===============================================================================
 class TWeets(TWeetsCoordinatesToFile,TWeetSentimentAnalyzed):
+    """
+        The class saves the tweet, it's sentiments in a csv file and
+        the coordinates in a separate file
+    """
+#-------------------------------------------------------------------------------
     def __init__(self,
     api=None,
     search=['None'],
@@ -302,6 +426,7 @@ class TWeets(TWeetsCoordinatesToFile,TWeetSentimentAnalyzed):
                 output.write('"SearchTerm","Id","Created","Retweeted","Favorited","Lang","Country","City","State","Sentiment"\n')
 
         return
+#-------------------------------------------------------------------------------
     def save_tweet(self,tweet):
         with open(self.tweets_file, "ab") as output:
             output.write('"'+search[0]+'",'+tweet['id']+','+tweet['created']+','+tweet['retweet_count']+','+tweet['favorite_count']+','+tweet['lang']+','+tweet['country']+','+tweet['city']+','+tweet['province']+', "'+tweet['sentiments']+'"\n')
@@ -310,6 +435,11 @@ class TWeets(TWeetsCoordinatesToFile,TWeetSentimentAnalyzed):
         TWeetsCoordinatesToFile.save_coordinates(self,tweet)
 #===============================================================================
 class TWeetsTotals(TWeetSentimentAnalyzed):
+    """
+        The class saves only total sentiments daily in a csv file
+        There is also hourly data but they are overwritten
+    """
+#-------------------------------------------------------------------------------
     def __init__(self,
     api=None,
     search=['None'],
@@ -326,6 +456,11 @@ class TWeetsTotals(TWeetSentimentAnalyzed):
     file_name='tweets_',
     file_extension='.csv'
     ):
+        """
+            start_Positive, start_Negative, start_Neutral, start_Confused (int, default 0),
+            start_RecordTime (datetime, now()) are used to init the class in a case
+            of unexpected failure and restarting to keep the numbers
+        """
         TWeetSentimentAnalyzed.__init__(self,
             api,
             search,
@@ -348,7 +483,11 @@ class TWeetsTotals(TWeetSentimentAnalyzed):
                 output.write('"SearchTerm", "EndDateTime", "Positive", "Negative", "Neutral", "Confused"\n')
 
         return
+#-------------------------------------------------------------------------------
     def save_tweet(self,tweet):
+        """
+            Saves the totals daily and intermediate results hourly
+        """
         if tweet['sentiments']=='Positive':
             self.Positive_num+=1
         elif tweet['sentiments']=='Negative':
@@ -415,7 +554,7 @@ if __name__ == "__main__":
     start_Neutral=0
     start_Confused=0
     start_RecordTime=datetime.datetime.now()
-
+    #for testing
     #listener=TWeetsTotals(api, search,time_limit,tweets_num,start_time,start_counter,start_Positive,start_Negative,start_Neutral,start_Confused,start_RecordTime,file_path,file_name,file_extension)
     #stream = tweepy.Stream(auth, listener)
     #stream.filter(track=search, languages=['en'])
@@ -423,6 +562,7 @@ if __name__ == "__main__":
     #listener = TWeetSentimentAnalyzed(api, search,time_limit,tweets_num,start_time,start_counter)
     #stream = tweepy.Stream(auth, listener)
     #stream.filter(track=search)
+    #to run the script forever in prod
     while True:
         try:
             listener=TWeetsTotals(api, search,time_limit,tweets_num,start_time,start_counter,start_Positive,start_Negative,start_Neutral,start_Confused,start_RecordTime,file_path,file_name,file_extension)
